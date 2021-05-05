@@ -1,48 +1,69 @@
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "aes.h"
 
 int main(int argc, char **argv) {
+    FILE *in_file;
+    FILE *out_file;
+    size_t file_size;
+    size_t n_read;
+    size_t n_write;
+    char out_path[1024];
     uint8_t w[11][4][4];
     uint8_t data[4][4];
     uint8_t out[4][4];
-    uint8_t original[4][4];
-    char *key = "wew YOU foo bar!";
+    char key[16] = {0};
 
-
-    // populate data
-    for (int i = 0; i < 4; i++) {
-        for (int j = 0; j < 4; j++) {
-            data[i][j] = 4*i + j;
-        }
+    // check arg length
+    if (argc != 3) {
+        fprintf(stderr, "./aes_encrypt [PATH] [KEY]\n");
+        return 1;
     }
 
+    if (!(in_file = fopen(argv[1], "r"))) {
+        fprintf(stderr, "Error opening file %s\n", argv[1]);
+        return 1;
+    }
+
+    sprintf(out_path, "%s.AESCIPHER", argv[1]);
+
+    if (!(out_file = fopen(out_path, "w"))) {
+        fclose(in_file);
+        fprintf(stderr, "Error opening file %s\n", argv[1]);
+        return 1;
+    }
+
+    // populate key schedule
+    strncpy(key, argv[2], 16);
     key_expansion((uint8_t (*)[4])key, w);
 
-    /* for (int round = 0; round < 11; round++) { */
-    /*     for (int j = 0; j < 4; j++) { */
-    /*         printf("%d %d %d %d\n", w[round][0][j], w[round][1][j], w[round][2][j], w[round][3][j]); */
-    /*     } */
-    /* } */
+    fseek(in_file, 0L, SEEK_END);
+    file_size = ftell(in_file);
+    rewind(in_file);
 
-    cipher(data, out, w);
+    // write length to head
+    fwrite(&file_size, 1, sizeof(size_t), out_file);
 
-    for (int i = 0; i < 4; i++) {
-        for (int j = 0; j < 4; j++) {
-            printf("%d -> %d\n", data[i][j], out[i][j]);
+    do {
+        // zero out the block buffer
+        bzero(data, 16);
+        // read from file into block
+        n_read = fread(data, 1, 16, in_file);
+        if (n_read == 0) {
+            break;
         }
-    }
+        // run block through AES
+        cipher(data, out, w);
+        // write out block to file
+        n_write = fwrite(out, 1, 16, out_file);
+    } while (n_read == 16);
 
-    printf("\n");
+    fclose(in_file);
+    fclose(out_file);
 
-    inverse_cipher(out, original, w);
-
-    for (int i = 0; i < 4; i++) {
-        for (int j = 0; j < 4; j++) {
-            printf("%d -> %d\n", out[i][j], original[i][j]);
-        }
-    }
+    printf("Finished\n");
 
     return 0;
 }
