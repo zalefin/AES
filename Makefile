@@ -4,7 +4,7 @@ CFLAGS=-c -g
 
 .PHONY: clean
 
-all: aes_encrypt aes_decrypt tests
+all: aes_encrypt aes_decrypt
 
 aes_encrypt: aes_encrypt.c aes.o
 	${CC} $^ -o $@
